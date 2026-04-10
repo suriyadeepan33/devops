@@ -1,0 +1,166 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL     = 'https://github.com/yourusername/yourusername.github.io.git'
+        DEPLOY_DIR   = '/var/www/html/portfolio'
+        SITE_NAME    = 'Suriyadeepan Portfolio'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo '📥 Pulling latest code from GitHub...'
+                git branch: 'main', url: "${env.REPO_URL}"
+                echo '✅ Code checkout complete'
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                echo '🔍 Validating portfolio files...'
+                sh '''
+                    echo "Files in workspace:"
+                    ls -la
+
+                    # Check index.html exists
+                    if [ -f index.html ]; then
+                        echo "✅ index.html found"
+                    else
+                        echo "❌ index.html missing!"
+                        exit 1
+                    fi
+
+                    # Check file is not empty
+                    SIZE=$(wc -c < index.html)
+                    echo "📦 File size: $SIZE bytes"
+
+                    if [ $SIZE -lt 100 ]; then
+                        echo "❌ File too small!"
+                        exit 1
+                    fi
+
+                    echo "✅ Validation passed!"
+                '''
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo '🔨 Building portfolio...'
+                sh '''
+                    echo "📋 Build Info:"
+                    echo "  Branch  : $(git branch --show-current)"
+                    echo "  Commit  : $(git log -1 --pretty=%B)"
+                    echo "  Date    : $(date)"
+                    echo "  Author  : $(git log -1 --pretty=%an)"
+                    echo "✅ Build info captured"
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo '🧪 Running tests...'
+                sh '''
+                    # Check HTML has required tags
+                    if grep -q "<html" index.html; then
+                        echo "✅ HTML tag found"
+                    else
+                        echo "❌ HTML tag missing!"
+                        exit 1
+                    fi
+
+                    if grep -q "<title>" index.html; then
+                        echo "✅ Title tag found"
+                    else
+                        echo "❌ Title tag missing!"
+                        exit 1
+                    fi
+
+                    if grep -q "Suriyadeepan" index.html; then
+                        echo "✅ Portfolio content verified"
+                    else
+                        echo "❌ Portfolio content missing!"
+                        exit 1
+                    fi
+
+                    echo "✅ All tests passed!"
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo '🚀 Deploying portfolio...'
+                sh '''
+                    # Create deploy directory if not exists
+                    sudo mkdir -p ${DEPLOY_DIR}
+
+                    # Copy files to deploy directory
+                    sudo cp index.html ${DEPLOY_DIR}/
+
+                    # Set correct permissions
+                    sudo chown -R www-data:www-data ${DEPLOY_DIR}
+                    sudo chmod -R 755 ${DEPLOY_DIR}
+
+                    echo "✅ Portfolio deployed to ${DEPLOY_DIR}"
+                    echo "🌐 Site is live!"
+                '''
+            }
+        }
+
+    }
+
+    post {
+        success {
+            echo """
+            ╔══════════════════════════════════╗
+            ║   ✅ PIPELINE SUCCEEDED!          ║
+            ║   🚀 Portfolio is LIVE!           ║
+            ╚══════════════════════════════════╝
+            """
+        }
+        failure {
+            echo """
+            ╔══════════════════════════════════╗
+            ║   ❌ PIPELINE FAILED!             ║
+            ║   🔍 Check logs above             ║
+            ╚══════════════════════════════════╝
+            """
+        }
+        always {
+            echo '🧹 Cleaning up workspace...'
+            cleanWs()
+        }
+    }
+}
+```
+
+---
+
+## Step 4 — Create Jenkins Pipeline Job
+
+1. Go to **Jenkins Dashboard → New Item**
+2. Enter name: `portfolio-cicd`
+3. Select **Pipeline** → click **OK**
+4. Under **Pipeline** section:
+   - Definition: `Pipeline script from SCM`
+   - SCM: `Git`
+   - Repository URL: `https://github.com/yourusername/yourusername.github.io.git`
+   - Branch: `*/main`
+   - Script Path: `Jenkinsfile`
+5. Click **Save**
+
+---
+
+## Step 5 — Set Up GitHub Webhook
+
+This makes Jenkins auto-trigger on every push.
+
+**In GitHub:**
+1. Go to your repo → **Settings → Webhooks → Add webhook**
+2. Payload URL:
+```
+   http://YOUR_JENKINS_IP:8080/github-webhook/
